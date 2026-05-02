@@ -1,0 +1,60 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">
+	<DataProcessor uuid="9d1b2d60-9880-4476-b671-b34d6ec7e3b9">
+		<InternalInfo>
+			<xr:GeneratedType name="DataProcessorObject.MakeALisp" category="Object">
+				<xr:TypeId>d39dbb9a-9fa1-403f-988a-7510aac53b71</xr:TypeId>
+				<xr:ValueId>3b2f8484-8529-45c9-9a9e-fa168fbb608e</xr:ValueId>
+			</xr:GeneratedType>
+			<xr:GeneratedType name="DataProcessorManager.MakeALisp" category="Manager">
+				<xr:TypeId>ace95024-27fa-48f7-a7b2-56942be31df8</xr:TypeId>
+				<xr:ValueId>c0c39211-80ff-4a03-8016-c080b0c16404</xr:ValueId>
+			</xr:GeneratedType>
+		</InternalInfo>
+		<Properties>
+			<Name>MakeALisp</Name>
+			<Synonym>
+				<v8:item>
+					<v8:lang>en</v8:lang>
+					<v8:content>Make a lisp</v8:content>
+				</v8:item>
+			</Synonym>
+			<Comment/>
+			<UseStandardCommands>false</UseStandardCommands>
+			<DefaultForm/>
+			<AuxiliaryForm/>
+			<IncludeHelpInContents>false</IncludeHelpInContents>
+			<ExtendedPresentation>
+				<v8:item>
+					<v8:lang>en</v8:lang>
+					<v8:content>Make a Lisp</v8:content>
+				</v8:item>
+			</ExtendedPresentation>
+			<Explanation/>
+		</Properties>
+		<ChildObjects>
+			<Form>Form</Form>
+			<Form>Picture0</Form>
+			<Form>Picture1</Form>
+			<Form>Picture2</Form>
+			<Form>Picture3</Form>
+			<Form>Picture4</Form>
+			<Form>Picture5</Form>
+			<Form>Picture6</Form>
+			<Form>Picture7</Form>
+			<Form>Picture8</Form>
+			<Form>Picture9</Form>
+			<Form>PictureA</Form>
+			<Template>Test0</Template>
+			<Template>Test2</Template>
+			<Template>Test3</Template>
+			<Template>Test4</Template>
+			<Template>Test5</Template>
+			<Template>Test6</Template>
+			<Template>Test7</Template>
+			<Template>Test8</Template>
+			<Template>Test9</Template>
+			<Template>TestA</Template>
+		</ChildObjects>
+	</DataProcessor>
+</MetaDataObject>

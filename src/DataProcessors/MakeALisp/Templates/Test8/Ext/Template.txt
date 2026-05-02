@@ -1,0 +1,106 @@
+﻿;; Testing trivial macros
+(defmacro! one (fn* () 1))
+(one)											;=>1
+(defmacro! two (fn* () 2))
+(two)											;=>2
+
+;; Testing unless macros
+(defmacro! unless (fn* (pred a b) `(if ~pred ~b ~a)))
+(unless false 7 8)								;=>7
+(unless true 7 8)								;=>8
+(defmacro! unless2 (fn* (pred a b) (list 'if (list 'not pred) a b)))
+(unless2 false 7 8)								;=>7
+(unless2 true 7 8)								;=>8
+
+;; Testing evaluation of macro result
+(defmacro! identity (fn* (x) x))
+(let* (a 123) (identity a))						;=>123
+
+;; Test that macros do not break empty list
+()												;=>()
+
+;; Test that macros do not break quasiquote
+`(1)											;=>(1)
+
+;>>> deferrable=True
+;;
+;; -------- Deferrable Functionality --------
+
+;; Testing non-macro function
+(not (= 1 1))									;=>false
+
+;;; This should fail if it is a macro
+(not (= 1 2))									;=>true
+
+;; Testing nth, first and rest functions
+(nth (list 1) 0)								;=>1
+(nth (list 1 2) 1)								;=>2
+(nth (list 1 2 nil) 2)							;=>nil
+(def! x "x")
+(def! x (nth (list 1 2) 2))
+x												;=>"x"
+
+(first (list))									;=>nil
+(first (list 6))								;=>6
+(first (list 7 8 9))							;=>7
+
+(rest (list))									;=>()
+(rest (list 6))									;=>()
+(rest (list 7 8 9))								;=>(8 9)
+
+
+;; Testing cond macro
+(cond)											;=>nil
+(cond true 7)									;=>7
+(cond false 7)									;=>nil
+(cond true 7 true 8)							;=>7
+(cond false 7 true 8)							;=>8
+(cond false 7 false 8 "else" 9)					;=>9
+(cond false 7 (= 2 2) 8 "else" 9)				;=>8
+(cond false 7 false 8 false 9)					;=>nil
+
+;; Testing EVAL in let*
+(let* (x (cond false "no" true "yes")) x)		;=>"yes"
+
+;; Testing nth, first, rest with vectors
+(nth [1] 0)										;=>1
+(nth [1 2] 1)									;=>2
+(nth [1 2 nil] 2)								;=>nil
+(def! x "x")									
+(def! x (nth [1 2] 2))
+x												;=>"x"
+
+(first [])										;=>nil
+(first nil)										;=>nil
+(first [10])									;=>10
+(first [10 11 12])								;=>10
+
+(rest [])										;=>()
+(rest nil)										;=>()
+(rest [10])										;=>()
+(rest [10 11 12])								;=>(11 12)
+(rest (cons 10 [11 12]))						;=>(11 12)
+
+;; Testing EVAL in vector let*
+(let* [x (cond false "no" true "yes")] x)		;=>"yes"
+
+;; Test return value of defmacro!
+(let* [m (defmacro! _ (fn* [] 1))] (macro? m))	;=>true
+
+;>>> soft=True
+;>>> optional=True
+;;
+;; ------- Optional Functionality --------------
+;; ------- (Not needed for self-hosting) -------
+
+;; Test that macros use closures
+(def! x 2)
+(defmacro! a (fn* [] x))
+(a)												;=>2
+(let* (x 3) (a))								;=>2
+
+(let* (DEBUG-EVAL true) (unless x foo (- 4 3)))	;/EVAL: \(if x \(- 4 3\) foo\).*\n1
+(let* (DEBUG-EVAL true) (unless2 x foo (- 4 3)))
+												;/EVAL: \(if \(not x\) foo \(- 4 3\)\).*\n1
+(let* (DEBUG-EVAL true) (cond x (- 4 3) foo bar))
+												;/EVAL: \(if x \(- 4 3\) \(cond foo ba
