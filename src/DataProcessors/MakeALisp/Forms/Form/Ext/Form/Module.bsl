@@ -8,7 +8,7 @@ EndProcedure
 Procedure CallLispInterpreter()
 	
 	If Step = "0" Then
-//		Output = Step0.MaL_Step_0(Input, DebugLog);
+		Output = Step0.MaL_Step_0(Input, DebugLog);
 	ElsIf Step = "1" Then
 //		Output = Step1.MaL_Step_1(Input, DebugLog);
 	ElsIf Step = "2" Then
