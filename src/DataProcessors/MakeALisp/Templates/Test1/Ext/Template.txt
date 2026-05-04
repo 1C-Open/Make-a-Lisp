@@ -4,7 +4,6 @@
   7  										;=>7
 -123										;=>-123
 
-
 ;; Testing read of symbols
 +											;=>+
 abc											;=>abc
@@ -78,19 +77,6 @@ false										;=>false
 "~"											;=>"~"
 "!"											;=>"!"
 
-;; Testing reader errors
-(1 2										;/.*(EOF|end of input|unbalanced).*
-[1 2										;/.*(EOF|end of input|unbalanced).*
-{"a" 2										;/.*(EOF|end of input|unbalanced).*
-
-;;; These should throw some error with no return value
-"abc										;/.*(EOF|end of input|unbalanced).*
-"											;/.*(EOF|end of input|unbalanced).*
-"\"											;/.*(EOF|end of input|unbalanced).*
-"\\\\\\\\\\\\\\\\\\\"						;/.*(EOF|end of input|unbalanced).*
-(1 "abc										;/.*(EOF|end of input|unbalanced).*
-(1 "abc"									;/.*(EOF|end of input|unbalanced).*
-
 ;; Testing read of quoting
 '1											;=>(quote 1)
 '(1 2 3)									;=>(quote (1 2 3))
@@ -101,7 +87,6 @@ false										;=>false
 ~(1 2 3)									;=>(unquote (1 2 3))
 `(1 ~a 3)									;=>(quasiquote (1 (unquote a) 3))
 ~@(1 2 3)									;=>(splice-unquote (1 2 3))
-
 
 ;; Testing keywords
 :kw											;=>:kw
@@ -175,3 +160,17 @@ a:											;=>a:
 
 ;;; Hopefully less problematic characters
 1; &()*+,-./:;<=>?@[]^_{|}~					;=>1
+
+;; Testing reader errors
+(1 2										;/.*(EOF|end of input|unbalanced).*
+[1 2										;/.*(EOF|end of input|unbalanced).*
+{"a" 2										;/.*(EOF|end of input|unbalanced).*
+
+;;; These should throw some error with no return value
+"abc										;/.*(EOF|end of input|unbalanced).*
+"											;/.*(EOF|end of input|unbalanced).*
+"\"											;/.*(EOF|end of input|unbalanced).*
+"\\\\\\\\\\\\\\\\\\\"						;/.*(EOF|end of input|unbalanced).*
+(1 "abc										;/.*(EOF|end of input|unbalanced).*
+(1 "abc"									;/.*(EOF|end of input|unbalanced).*
+

@@ -247,6 +247,7 @@
 		<ChildObjects>
 			<Language>English</Language>
 			<CommonModule>Step0</CommonModule>
+			<CommonModule>Step1</CommonModule>
 			<DataProcessor>MakeALisp</DataProcessor>
 		</ChildObjects>
 	</Configuration>
