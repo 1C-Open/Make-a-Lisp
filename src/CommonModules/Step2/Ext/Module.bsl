@@ -1,15 +1,14 @@
-﻿// =============================================================================
-// MaL (Make-a-Lisp) Interpreter - Step 1: Read and Print
 // =============================================================================
-// This module implements the foundational layer of the Lisp interpreter:
-// 1. Tokenization: Converting raw string input into a list of tokens.
-// 2. Reading: Parsing tokens into Abstract Syntax Tree (AST) structures.
-// 3. Printing: Serializing AST back to string representation (pr_str)
-//    and debugging format.
+// MaL (Make-a-Lisp) Interpreter - Step 2: Eval
+// =============================================================================
+// This module implements the core evaluation layer of the interpreter:
+// 1. Environment: Establishes a context for symbols (mapping symbols to functions).
+// 2. Exec: Performs recursive evaluation of the Abstract Syntax Tree (AST).
+// 3. Apply: Executes standard mathematical operations on evaluated arguments.
 // =============================================================================
 
-// Main entry point for Step 1 of the Make-a-Lisp interpreter.
-// Executes the Read-Eval-Print Loop for a given input string.
+// Main entry point for Step 2 of the Make-a-Lisp interpreter.
+// Evaluates the abstract syntax tree in a basic environment.
 //
 // Parameters:
 //   Input - String - The raw Lisp code entered by the user.
@@ -17,13 +16,14 @@
 //
 // Returns:
 //   String - The final result of the REPL pipeline (serialized string representation).
-Function MaL_Step_1( Input, Debug ) Export
+Function MaL_Step_2( Input, Debug ) Export
 	AST = Read(Input, Debug);
-	Result = Exec(AST, Debug);
+	Environment = CreateEnvironment();
 	Output = "";
-	For Each Form In Result.Value Do
-		Output = Output + PrintForm(Form) + Chars.CR;	
-	EndDo;	
+	For Each Expression In AST.Value Do
+		Result = Exec(Expression, Environment, Debug);
+    	Output = Output + Print(Result, Debug) + Chars.CR; 
+	EndDo;
 	Return Output;
 EndFunction	
 
@@ -35,7 +35,7 @@ EndFunction
 //   Debug - String - An output parameter used to capture debugging information.
 //
 // Returns:
-//   String - The processed input string.
+//   AST   - Array  - Abstract Syntax Tree (AST) structures.
 Function Read(Input, Debug)
 // 1. Lexical analysis
    	Tokens = Tokenize(Input);
@@ -63,19 +63,87 @@ Function Read(Input, Debug)
     Return AST;
 EndFunction
 
-// Orchestrates the evaluation of the read input. 
-// In future stages, this function will contain the central logic for interpreting 
-// Lisp S-expressions. It calls 'Read' to initialize the data and populates 
-// the debug info.
-// 
+// Recursively evaluates the AST (Abstract Syntax Tree).
+// 1. Returns the raw value for Atoms (Number, Boolean, Nil).
+// 2. Performs a lookup in the Environment for Symbols.
+// 3. Handles List application: evaluates all items in the list, 
+//    then passes the operator and arguments to 'Apply'.
+//
 // Parameters:
-//   AST   - Array  - Abstract Syntax Tree (AST) structures.
-//   Debug - String - An output parameter used to store execution trace details.
+//   AST         - Array|Structure - The node to evaluate.
+//   Environment - Map             - The execution context for symbol lookups.
+//   Debug       - String          - Output parameter for tracing.
 //
 // Returns:
-//   AST - The result of the evaluation (currently delegates to 'Read').
-Function Exec(AST, Debug) 
-	Return AST;
+//   Any - The result of the evaluation.
+Function Exec(AST, Environment, Debug) Export
+    
+    // 1. If it's a SYMBOL, look it up in the Environment
+    If AST.Type = "Symbol" Then
+		Result = Environment.Get(AST.Value);
+		If Result = Undefined Then
+			Return CreateError("Exec", "Symbol not found: %1", AST.Value);
+		EndIf;
+        Return Result;
+        
+    // 2. If it's a List (Function application)
+    ElsIf AST.Type = "List" Then
+		// 2.1 Check if the list is empty
+    	If AST.Value.Count() = 0 Then
+        	// Empty lists evaluate to themselves (like numbers or strings)
+        	Return AST;
+		EndIf;
+		// 2.2 Evaluate all elements recursively (eval_ast)
+        EvaluatedList = New Array;
+        For Each Item In AST.Value Do
+			EvaluatedItem = Exec(Item, Environment, Debug);
+			If TypeOf(EvaluatedItem) = Type("Structure") Then
+				If EvaluatedItem.Property("Type") Then
+					If EvaluatedItem.Type = "Error" Then Return EvaluatedItem; EndIf;
+				EndIf;
+			EndIf;
+            EvaluatedList.Add(EvaluatedItem);
+        EndDo;
+        
+        // 2.3 The first element is the function identifier (operator)
+        Operator = EvaluatedList[0];
+        
+        // Create an array of arguments (everything except the first element)
+        Args = New Array;
+        For i = 1 To EvaluatedList.Count() - 1 Do
+            Args.Add(EvaluatedList[i]);
+        EndDo;
+        
+        // Apply the operator to the arguments
+        Return Apply(Operator, Args);
+        
+	// Handle Vector: evaluate all elements within the vector
+    ElsIf AST.Type = "Vector" Then
+        // Initialize an array to store the evaluated elements
+        EvaluatedValues = New Array;
+        // Recursively evaluate each element in the vector
+        For Each Element In AST.Value Do
+            EvaluatedValues.Add(Exec(Element, Environment, Debug));
+        EndDo;
+		// Return a new Vector node containing the evaluated elements
+        Return New Structure("Type, Value", "Vector", EvaluatedValues);
+       
+	ElsIf AST.Type = "HashMap" Then
+    	NewValue = New Array;
+    	// Iterate through the flat array [k1, v1, k2, v2...]
+    	For Each Element In AST.Value Do
+        // Evaluate the element (if it's a Keyword, it stays as is,
+        // if it's an expression like (+ 1 2), it becomes 3)
+        	NewValue.Add(Exec(Element, Environment, Debug));
+    	EndDo;
+    	Return New Structure("Type, Value", "HashMap", NewValue);
+
+	// 3. If it's an ATOM (Number, String, Boolean, Nil) — return the Node itself
+    // Or, if you want to strictly return the raw value, you could return AST.Value
+    Else 
+        Return AST;
+    EndIf;
+    
 EndFunction
 
 // Finalizes the output by converting the result of 'Exec' into a string format 
@@ -87,7 +155,7 @@ EndFunction
 //
 // Returns:
 //   String - The final string representation to be displayed in the UI.
-Function Print(AST, Debug) 
+Function Print(AST, Debug)
     Return PrintForm(AST);
 EndFunction
 
@@ -596,3 +664,62 @@ Function PrintDebug(Node, Indent = 0)
 
     Return Result;
 EndFunction
+
+// Initializes the global environment with base arithmetic operations.
+//
+// Returns:
+//   Map - A lookup table where symbols (e.g., "+") are mapped to 
+//         internal operator identifiers (e.g., "ADD").
+Function CreateEnvironment()
+    Environment = New Map;
+    // We register the base arithmetic operations
+    Environment.Insert("/", "DIV");
+    Environment.Insert("*", "MUL");
+    Environment.Insert("-", "SUB");
+    Environment.Insert("+", "ADD");
+    
+    Return Environment;
+EndFunction
+
+// Executes the mathematical function associated with the operator identifier.
+// 
+// Parameters:
+//   Operator - String - The internal identifier of the function (e.g., "ADD", "MUL").
+//   Args     - Array  - A list of already evaluated arguments.
+//
+// Returns:
+//   Number - The result of the operation.
+// Raises:
+//   Exception - If the operator is unknown.
+Function Apply(Operator, Args)
+    If Operator = "ADD" Then Sum = 0;
+        For Each Arg In Args Do
+            Sum = Sum + Arg.Value;
+        EndDo;
+        Return New Structure("Type, Value", "Number", Sum);
+    ElsIf Operator = "SUB" Then
+		If Args.Count() = 0 Then Return CreateError("Apply", "Wrong number of args (0) passed to -"); EndIf;
+		If Args.Count() = 1 Then Return New Structure("Type, Value", "Number", -Args[0].Value); EndIf;
+        Result = Args[0].Value;
+        For i = 1 To Args.UBound() Do
+            Result = Result - Args[i].Value;
+        EndDo;
+        Return New Structure("Type, Value", "Number", Result);
+	ElsIf Operator = "MUL" Then Product = 1;
+        For Each Arg In Args Do
+            Product = Product * Arg.Value;
+        EndDo;
+        Return New Structure("Type, Value", "Number", Product);
+    ElsIf Operator = "DIV" Then
+		If Args.Count() = 0 Then Return CreateError("Apply", "Wrong number of args (0) passed to /"); EndIf;
+		If Args.Count() = 1 Then Return New Structure("Type, Value", "Number", 1 / Args[0].Value); EndIf;
+        Result = Args[0].Value;
+        For i = 1 To Args.UBound() Do
+            Result = Result / Args[i].Value;
+        EndDo;
+        Return New Structure("Type, Value", "Number", Result);
+	Else
+        Return CreateError("Apply", "Unknown function %1", Operator);
+    EndIf;
+EndFunction
+

@@ -12,7 +12,7 @@ Procedure CallLispInterpreter()
 	ElsIf Step = "1" Then
 		Output = Step1.MaL_Step_1(Input, DebugLog);
 	ElsIf Step = "2" Then
-//		Output = Step2.MaL_Step_2(Input, DebugLog);
+		Output = Step2.MaL_Step_2(Input, DebugLog);
 	ElsIf Step = "3" Then
 //		Output = Step3.MaL_Step_3(Input, DebugLog);
 	ElsIf Step = "4" Then
