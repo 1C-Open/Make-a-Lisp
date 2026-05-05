@@ -28,7 +28,7 @@ The implementation is broken down into the following stages. Development progres
 
 - [x] **Step 0:** REPL — Basic Read-Eval-Print Loop (simple echo response).
 - [x] **Step 1:** Read and Print — Parsing the string into an Abstract Syntax Tree (AST) and printing it back.
-- [ ] **Step 2:** Eval — Basic evaluation of arithmetic and other simple expressions.
+- [x] **Step 2:** Eval — Basic evaluation of arithmetic and other simple expressions.
 - [ ] **Step 3:** Environments — Adding environments (variable storage) and `let` / `def!` constructs.
 - [ ] **Step 4:** If, Fn, Do — Core implementation: conditional statements, user-defined functions.
 - [ ] **Step 5:** Tail Call Optimization (TCO) — Tail-call optimization to prevent stack overflow.
