@@ -30,7 +30,7 @@ The implementation is broken down into the following stages. Development progres
 - [x] **Step 1:** Read and Print — Parsing the string into an Abstract Syntax Tree (AST) and printing it back.
 - [x] **Step 2:** Eval — Basic evaluation of arithmetic and other simple expressions.
 - [x] **Step 3:** Environments — Adding environments (variable storage) and `let` / `def!` constructs.
-- [ ] **Step 4:** If, Fn, Do — Core implementation: conditional statements, user-defined functions.
+- [x] **Step 4:** If, Fn, Do — Core implementation: conditional statements, user-defined functions.
 - [ ] **Step 5:** Tail Call Optimization (TCO) — Tail-call optimization to prevent stack overflow.
 - [ ] **Step 6:** Files, Mutation, and Evil — File operations, state mutation, `eval`.
 - [ ] **Step 7:** Quoting — Implementation of quoting (`quote`, `quasiquote`, `unquote`).
