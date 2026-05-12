@@ -1,14 +1,14 @@
-﻿// =============================================================================
-// MaL (Make-a-Lisp) Interpreter - Step 3: Environments
 // =============================================================================
-// This module upgrades the interpreter with hierarchical scope management:
-// 1. Environment: Implements a linked structure with 'Outer' pointers for scope chaining.
-// 2. Scope Resolution: Implements recursive symbol lookup (lexical scoping).
-// 3. Special Forms: Implements 'def!' for environment mutation and 'let*' for nested lexical scope.
-// 4. Global Context: Establishes the global environment for base arithmetic operators.
+// MaL (Make-a-Lisp) Interpreter - Step 4: If Fn Do
+// =============================================================================
+// This module implements the control flow and I/O core of the interpreter:
+// 1. Implements core special forms ('if', 'do', 'fn*') for branching,
+//    sequencing, and function definition with lexical closures.
+// 2. Provides I/O primitives ('prn', 'println', 'str', 'pr-str') with
+//    robust string escaping support for consistent data serialization.
 // =============================================================================
 
-// Main entry point for Step 3 of the Make-a-Lisp interpreter.
+// Main entry point for Step 4 of the Make-a-Lisp interpreter.
 // Evaluates the abstract syntax tree in a basic environment.
 //
 // Parameters:
@@ -17,12 +17,13 @@
 //
 // Returns:
 //   String - The final result of the REPL pipeline (serialized string representation).
-Function MaL_Step_3(Input, Debug) Export
+Function MaL_Step_4(Input, Debug) Export
     AST = Read(Input, Debug);
-    Environment = CreateGlobalEnvironment();
+    GlobalEnvironment = CreateGlobalEnvironment();
+    InitializeCore(GlobalEnvironment);
     Output = "";
     For Each Expression In AST.Value Do
-        Result = Exec(Expression, Environment, Debug);
+        Result = Exec(Expression, GlobalEnvironment, Debug);
         Output = Output + Print(Result, Debug) + Chars.CR;
     EndDo;
     Return Output;
@@ -97,11 +98,11 @@ Function Exec(AST, Environment, Debug) Export
         // 2.2 Check for Special Forms FIRST (def!)
         If OperatorNode.Type = "Symbol" AND OperatorNode.Value = "def!" Then
             // def! special form logic
-			If NodesArray.Count() < 3 Then 
-				Return CreateError("Exec", "Wrong number of args passed to def!");
-			ElsIf NodesArray[1].Type <> "Symbol" Then 
-				Return CreateError("Exec", "First argument to def! must be a symbol"); 
-			EndIf;
+            If NodesArray.Count() < 3 Then
+                Return CreateError("Exec", "Wrong number of args passed to def!");
+            ElsIf NodesArray[1].Type <> "Symbol" Then
+                Return CreateError("Exec", "First argument to def! must be a symbol");
+            EndIf;
             SymbolName = NodesArray[1].Value; // Get symbol name (unevaluated)
             ValueNode = Exec(NodesArray[2], Environment, Debug); // Evaluate expression
             If IsError(ValueNode) Then Return ValueNode; EndIf;
@@ -109,15 +110,16 @@ Function Exec(AST, Environment, Debug) Export
             Return ValueNode; // IMPORTANT: Bypass evaluation loop and return immediately
             // 2.3 Check for Special Forms (let*)
         ElsIf OperatorNode.Type = "Symbol" AND OperatorNode.Value = "let*" Then
-			If NodesArray.Count() < 3 Then 
-				Return CreateError("Exec", "Wrong number of args passed to let*");
-			ElsIf NodesArray[1].Type <> "List" AND NodesArray[1].Type <> "Vector" Then 
-				Return CreateError("Exec", "let* bindings must be a list or vector");
-			ElsIf NodesArray[1].Value.Count() % 2 <> 0 Then
-    			Return CreateError("Exec", "let* bindings must have an even number of elements");
-			EndIf;
-            LocalEnvironment = CreateEnvironment(Environment); // Create a new child environment
+            If NodesArray.Count() < 3 Then
+                Return CreateError("Exec", "Wrong number of args passed to let*");
+            ElsIf NodesArray[1].Type <> "List" AND NodesArray[1].Type <> "Vector" Then
+                Return CreateError("Exec", "let* bindings must be a list or vector");
+            EndIf;
+            
             BindingsArray = NodesArray[1].Value; // Get the array of bindings (list of pairs)
+            If BindingsArray.Count() % 2 <> 0 Then Return CreateError("Exec", "let* bindings must have an even number of elements"); EndIf;
+            
+            LocalEnvironment = CreateEnvironment(Environment); // Create a new child environment
             // Process bindings in pairs
             i = 0;
             While i < BindingsArray.Count() Do
@@ -127,15 +129,116 @@ Function Exec(AST, Environment, Debug) Export
                 // Validate index existence to prevent out-of-bounds error
                 ExpressionNode = BindingsArray[i + 1];
                 ValueNode = Exec(ExpressionNode, LocalEnvironment, Debug); // Evaluate the value in the new environment
-				If IsError(ValueNode) Then 
-					Return ValueNode;
-				Else
-					SetEnvironment(LocalEnvironment, SymbolName, ValueNode); // Add to the local environment
-  				EndIf;
-              	i = i + 2;
+                If IsError(ValueNode) Then
+                    Return ValueNode;
+                Else
+                    SetEnvironment(LocalEnvironment, SymbolName, ValueNode); // Add to the local environment
+                EndIf;
+                i = i + 2;
             EndDo;
             Return Exec(NodesArray[2], LocalEnvironment, Debug); // Evaluate the let* body
+            //Else
+            //    // Evaluate all elements recursively
+            //    EvaluatedList = New Array;
+            //    For Each Item In NodesArray Do
+            //        EvaluatedItem = Exec(Item, Environment, Debug);
+            //        If IsError(EvaluatedItem) Then Return EvaluatedItem; EndIf;
+            //        EvaluatedList.Add(EvaluatedItem);
+            //    EndDo;
+            //
+            //    Operator = EvaluatedList[0]; // The first element is the function identifier
+            //    Args = New Array; // Create an array of arguments (everything except the first element)
+            //    For i = 1 To EvaluatedList.Count() - 1 Do
+            //        Args.Add(EvaluatedList[i]);
+            //    EndDo;
+            //
+            //    Return Apply(Operator, Args); // Apply the operator to the arguments
+            //EndIf;
+            // 2.4 Check for Special Forms (if)
+        ElsIf OperatorNode.Value = "if" Then
+            // 2.4.1 Evaluate only the condition
+            Condition = Exec(NodesArray[1], Environment, Debug);
+            // 2.4.2 Check truthiness
+            // If the result is neither Nil nor False, it is considered true
+            If NOT Condition.Type = "Nil" AND NOT (Condition.Type = "Boolean" AND Condition.Value = FALSE) Then
+                // 2.4.3 If true, evaluate and return the 'then' branch
+                Return Exec(NodesArray[2], Environment, Debug);
+            Else
+                // 2.4.4 If false, evaluate the 'else' branch if it exists
+                If NodesArray.Count() > 3 Then
+                    Return Exec(NodesArray[3], Environment, Debug);
+                Else
+                    // If no 'else' branch exists, return nil
+                    Return New Structure("Type, Value", "Nil", Undefined);
+                EndIf;
+            EndIf;
+            // 2.5 Check for Special Forms (fn*)
+        ElsIf OperatorNode.Value = "fn*" Then
+            // Create function structure
+            FunctionStructure = New Structure;
+            FunctionStructure.Insert("Type", "Function");
+            FunctionStructure.Insert("Params", NodesArray[1]);
+            FunctionStructure.Insert("Body", NodesArray[2]);
+            FunctionStructure.Insert("Environment", Environment);
+            Return FunctionStructure;
+            // 2.6 Check for Special Forms (do)
+        ElsIf OperatorNode.Value = "do" Then
+            // 2.6.1 If 'do' is empty (e.g., (do)), return nil
+            If AST.Value.Count() = 1 Then
+                Return New Structure("Type, Value", "Nil", Undefined);
+            EndIf;
+            Result = New Structure("Type, Value", "Nil", Undefined);
+            // Evaluate each expression sequentially (starting from the second element)
+            For i = 1 To AST.Value.Count() - 1 Do
+                Result = Exec(AST.Value[i], Environment, Debug);
+            EndDo;
+            // Return the result of the last expression
+            Return Result;
         Else
+            Operator = Exec(AST.Value[0], Environment, Debug);
+            // Check: is it a structure, and does it have a 'Type' property?
+            If TypeOf(Operator) = Type("Structure") AND Operator.Property("Type") Then
+                // Check if this is an 'fn*' function
+                If Operator.Type = "Function" Then
+                    LocalEnvironment = CreateEnvironment(Operator.Environment);
+                    Params = Operator.Params.Value;
+                    ArgsCount = AST.Value.Count() - 1;
+                    For i = 0 To Params.Count() - 1 Do
+                        ParamName = Params[i].Value;
+                        If ParamName = "&" Then
+                            // Check if there is a variable name after '&'
+                            If i + 1 < Params.Count() Then
+                                RestSymbol = Params[i + 1].Value;
+                                RestArgs = New Array;
+                                // Collect all remaining arguments into an array
+                                For j = i + 1 To ArgsCount Do
+                                    RestArgs.Add(Exec(AST.Value[j], Environment, Debug));
+                                EndDo;
+                                // Wrap in a List (as required by MaL for & more)
+                                ListNode = New Structure("Type, Value", "List", RestArgs);
+                                SetEnvironment(LocalEnvironment, RestSymbol, ListNode);
+                                Break; // Stop binding arguments
+                            EndIf;
+                        Else
+                            // Standard argument binding
+                            If i < ArgsCount Then
+                                ArgValue = Exec(AST.Value[i + 1], Environment, Debug); // Evaluate arguments
+                                SetEnvironment(LocalEnvironment, ParamName, ArgValue); // Store in the local environment
+                            EndIf;
+                        EndIf;
+                    EndDo;
+                    Return Exec(Operator.Body, LocalEnvironment, Debug);
+                EndIf;
+            EndIf;
+            
+            // Check if the operator is valid
+            // Assuming "Operator" should be a function or a built-in symbol
+            If IsError(Operator) Then
+                // This is where we catch your specific case (abc 1 2)
+                Debug = Debug + Operator.Value + Chars.CR;
+                Return Operator;
+            EndIf;
+            
             // Evaluate all elements recursively
             EvaluatedList = New Array;
             For Each Item In NodesArray Do
@@ -150,7 +253,7 @@ Function Exec(AST, Environment, Debug) Export
                 Args.Add(EvaluatedList[i]);
             EndDo;
             
-            Return Apply(Operator, Args); // Apply the operator to the arguments
+            Return Apply(Operator, Args, Debug); // Apply the operator to the arguments
         EndIf;
         
         // 3. Handle Vector: evaluate all elements within the vector
@@ -724,11 +827,6 @@ Function CreateEnvironment(Outer = Undefined)
     Return Environment;
 EndFunction
 
-// Inserts a Key-Value pair into the environment's Data map
-Procedure SetEnvironment(Environment, Symbol, Value)
-    Environment.Data.Insert(Symbol, Value);
-EndProcedure
-
 // Initializes the global environment with base arithmetic operations.
 //
 // Returns:
@@ -736,14 +834,13 @@ EndProcedure
 //         internal operator identifiers (e.g., "ADD").
 Function CreateGlobalEnvironment()
     // Create the top-level environment (it has no parent, so Undefined)
-    GlobalEnvironment = CreateEnvironment(Undefined);
-    // We register the base arithmetic operations
-    SetEnvironment(GlobalEnvironment, "/", "DIV");
-    SetEnvironment(GlobalEnvironment, "*", "MUL");
-    SetEnvironment(GlobalEnvironment, "-", "SUB");
-    SetEnvironment(GlobalEnvironment, "+", "ADD");
-    Return GlobalEnvironment;
+    Return CreateEnvironment(Undefined);
 EndFunction
+
+// Inserts a Key-Value pair into the environment's Data map
+Procedure SetEnvironment(Environment, Symbol, Value)
+    Environment.Data.Insert(Symbol, Value);
+EndProcedure
 
 // Recursive search for a variable in the environment chain
 Function GetEnvironment(Environment, Symbol) Export
@@ -761,17 +858,48 @@ Function GetEnvironment(Environment, Symbol) Export
     Return CreateError("GetEnvironment", "Symbol %1 not found", Symbol);
 EndFunction
 
+// Initializes the base environment with core functions and logical operators.
+//
+// Parameters:
+//   Environment - Structure - The environment to populate.
+Procedure InitializeCore(Environment)
+    // Register the base arithmetic operations
+    SetEnvironment(Environment, "+", "ADD");
+    SetEnvironment(Environment, "-", "SUB");
+    SetEnvironment(Environment, "*", "MUL");
+    SetEnvironment(Environment, "/", "DIV");
+    // Logic and Comparisons
+    SetEnvironment(Environment, "=", "EQ");
+    SetEnvironment(Environment, "<", "LT");
+    SetEnvironment(Environment, "<=", "LE");
+    SetEnvironment(Environment, ">", "GT");
+    SetEnvironment(Environment, ">=", "GE");
+    SetEnvironment(Environment, "<>", "NE");
+    SetEnvironment(Environment, "not", "NOT");
+    // List operations
+    SetEnvironment(Environment, "list", "LIST");
+    SetEnvironment(Environment, "list?", "LISTQ"); // 'Q' stands for Question mark (predicate)
+    SetEnvironment(Environment, "empty?", "EMPTYQ");
+    SetEnvironment(Environment, "count", "COUNT");
+    // I/O and String manipulation
+    SetEnvironment(Environment, "prn", "PRINT");
+    SetEnvironment(Environment, "println", "PRINTLN");
+    SetEnvironment(Environment, "pr-str", "PRSTR");
+    SetEnvironment(Environment, "str", "STR");
+EndProcedure
+
 // Executes the mathematical function associated with the operator identifier.
 //
 // Parameters:
 //   Operator - String - The internal identifier of the function (e.g., "ADD", "MUL").
 //   Args     - Array  - A list of already evaluated arguments.
+//   Debug    - String - Output parameter for tracing.
 //
 // Returns:
 //   Number - The result of the operation.
 // Raises:
 //   Exception - If the operator is unknown.
-Function Apply(Operator, Args)
+Function Apply(Operator, Args, Debug)
     If Operator = "ADD" Then Sum = 0;
         For Each Arg In Args Do
             Sum = Sum + Arg.Value;
@@ -798,7 +926,151 @@ Function Apply(Operator, Args)
             Result = Result / Args[i].Value;
         EndDo;
         Return New Structure("Type, Value", "Number", Result);
+    ElsIf Operator = "NOT" Then
+        // If the argument is nil (or false), 'not' returns true
+        // If the argument is anything else, 'not' returns false
+        // Check if the argument is "false" and return the inverted result
+        Return New Structure("Type, Value", "Boolean", (Args[0].Type = "Nil") OR (Args[0].Type = "Boolean" AND Args[0].Value = FALSE));
+    ElsIf Operator = "EQ" Then
+        Return IsEqual(Args[0], Args[1]);
+    ElsIf Operator = "NE" Then
+        Return New Structure("Type, Value", "Boolean", TypeOf(Args[0].Value) = TypeOf(Args[1].Value) AND Args[0].Value <> Args[1].Value);
+    ElsIf Operator = "LT" Then
+        Return New Structure("Type, Value", "Boolean", TypeOf(Args[0].Value) = TypeOf(Args[1].Value) AND Args[0].Value < Args[1].Value);
+    ElsIf Operator = "LE" Then
+        Return New Structure("Type, Value", "Boolean", TypeOf(Args[0].Value) = TypeOf(Args[1].Value) AND Args[0].Value <= Args[1].Value);
+    ElsIf Operator = "GT" Then
+        Return New Structure("Type, Value", "Boolean", TypeOf(Args[0].Value) = TypeOf(Args[1].Value) AND Args[0].Value > Args[1].Value);
+    ElsIf Operator = "GE" Then
+        Return New Structure("Type, Value", "Boolean", TypeOf(Args[0].Value) = TypeOf(Args[1].Value) AND Args[0].Value >= Args[1].Value);
+    ElsIf Operator = "LIST" Then
+        // The 'list' function collects all arguments into a list
+        // Since 'Args' already holds the arguments, we simply return it as a list
+        Return New Structure("Type, Value", "List", Args);
+    ElsIf Operator = "LISTQ" Then
+        // Check if the argument is a list
+        Return New Structure("Type, Value", "Boolean", Args[0].Type = "List");
+    ElsIf Operator = "EMPTYQ" Then
+        // Check if the value array inside the node is empty
+        Return New Structure("Type, Value", "Boolean", Args[0].Value.Count() = 0);
+    ElsIf Operator = "COUNT" Then
+        // If the argument is nil (or Undefined/Null), its size is 0
+        If Args[0].Type = "Nil" OR Args[0].Value = Undefined Then
+            Return New Structure("Type, Value", "Number", 0);
+        ElsIf Args[0].Type = "List" OR Args[0].Type = "Vector" Then
+            // Call Count() only if the type is 'List' or 'Vector'
+            Return New Structure("Type, Value", "Number", Args[0].Value.Count());
+        Else
+            // Report an error: 'count' expects a list, but received a number or other type
+            Return CreateError("Apply.COUNT", "Argument must be a list or nil, not %1", Args[0].Type);
+        EndIf;
+    ElsIf Operator = "STR" Then
+        // Concatenates the string representations of arguments. If an argument is a string, print it without quotes
+        Result = "";
+        For Each Arg In Args Do
+            If Arg.Type = "String" Then
+                Result = Result + Arg.Value;
+            Else
+                Result = Result + PrintForm(Arg);
+            EndIf;
+        EndDo;
+        Return New Structure("Type, Value", "String", Result);
+    ElsIf Operator = "PRSTR" Then
+        // Uses PrintForm for each argument and joins them with spaces
+        Result = "";
+        For i = 0 To Args.Count() - 1 Do
+            Result = Result + PrintForm(Args[i]);
+            If i < Args.Count() - 1 Then Result = Result + " "; EndIf;
+        EndDo;
+        Return New Structure("Type, Value", "String", Result);
+    ElsIf Operator = "PRINT" Then
+        //Uses PrintForm for each argument, joins them with spaces, and prints with a newline
+        // Returns nil and prints to Debug
+        ResultString = "";
+        For I = 0 To Args.Count() - 1 Do
+            ResultString = ResultString + PrintForm(Args[I]);
+            If I < Args.Count() - 1 Then ResultString = ResultString + " "; EndIf;
+        EndDo;
+        Debug = Debug + ResultString + Chars.CR;
+        Return New Structure("Type, Value", "Nil", Undefined);
+    ElsIf Operator = "PRINTLN" Then
+        // Uses PrintForm for each argument, joins them with spaces, and prints with a newline to standard output.
+        // Returns nil and prints to Debug
+        ResultString = "";
+        For I = 0 To Args.Count() - 1 Do
+            Arg = Args[I];
+            If Arg.Type = "String" Then
+                ResultString = ResultString + Arg.Value;
+            Else
+                ResultString = ResultString + PrintForm(Arg);
+            EndIf;
+            If I < Args.Count() - 1 Then ResultString = ResultString + " "; EndIf;
+        EndDo;
+        Debug = Debug + ResultString + Chars.CR;
+        Return New Structure("Type, Value", "Nil", Undefined);
     Else
         Return CreateError("Apply", "Unknown function %1", Operator);
     EndIf;
+EndFunction
+
+// Recursively compares two AST nodes for structural and value equality.
+//
+// Parameters:
+//   Node1 - Structure - The first node.
+//   Node2 - Structure - The second node.
+//
+// Returns:
+//   Structure - A Boolean Node containing the result.
+Function IsEqual(Node1, Node2)
+    // 1. Extract types for comparison
+    Type1 = Node1.Type;
+    Type2 = Node2.Type;
+    
+    // In MaL, Lists and Vectors are considered equivalent if they contain the same elements
+    If Type1 <> Type2 Then
+        // Check if both nodes are sequential collections
+        IsSeq1 = (Type1 = "List" OR Type1 = "Vector");
+        IsSeq2 = (Type2 = "List" OR Type2 = "Vector");
+        
+        // If one is a sequence and the other is not, they cannot be equal
+        If NOT (IsSeq1 AND IsSeq2) Then
+            Return New Structure("Type, Value", "Boolean", FALSE);
+        EndIf;
+    EndIf;
+    
+    // 2. Compare sequential collections (Lists and Vectors)
+    If Type1 = "List" OR Type1 = "Vector" OR Type2 = "List" OR Type2 = "Vector" Then
+        // Compare the number of elements first for efficiency
+        If Node1.Value.Count() <> Node2.Value.Count() Then
+            Return New Structure("Type, Value", "Boolean", FALSE);
+        EndIf;
+        
+        // Compare each element pair recursively
+        For i = 0 To Node1.Value.Count() - 1 Do
+            SubEqual = IsEqual(Node1.Value[i], Node2.Value[i]);
+            If NOT SubEqual.Value Then
+                // Return immediately if any pair of elements does not match
+                Return New Structure("Type, Value", "Boolean", FALSE);
+            EndIf;
+        EndDo;
+        
+        // All elements matched in order
+        Return New Structure("Type, Value", "Boolean", TRUE);
+    EndIf;
+    
+    // 3. Handle HashMap equality (Step 9/Optional)
+    If Type1 = "HashMap" Then
+        // HashMaps must have the same number of elements
+        If Node1.Value.Count() <> Node2.Value.Count() Then
+            Return New Structure("Type, Value", "Boolean", FALSE);
+        EndIf;
+        
+        // Note: For full HashMap support, you should compare keys/values
+        // regardless of their order in the flat array[cite: 105, 106].
+        // Implementing this requires a way to look up keys in the other map.
+    EndIf;
+    
+    // 4. Atomic types comparison (Number, String, Symbol, Boolean, Nil)
+    // BSL's "=" operator works correctly for these basic types
+    Return New Structure("Type, Value", "Boolean", (Node1.Value = Node2.Value));
 EndFunction

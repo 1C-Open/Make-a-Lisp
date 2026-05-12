@@ -16,7 +16,7 @@ Procedure CallLispInterpreter()
 	ElsIf Step = "3" Then
 		Output = Step3.MaL_Step_3(Input, DebugLog);
 	ElsIf Step = "4" Then
-//		Output = Step4.MaL_Step_4(Input, DebugLog);
+		Output = Step4.MaL_Step_4(Input, DebugLog);
 	ElsIf Step = "5" Then
 //		Output = Step5.MaL_Step_5(Input, DebugLog);
 	ElsIf Step = "6" Then
