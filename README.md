@@ -33,7 +33,7 @@ The implementation is broken down into the following stages. Development progres
 - [x] **Step 4:** If, Fn, Do — Core implementation: conditional statements, user-defined functions.
 - [x] **Step 5:** Tail Call Optimization (TCO) — *[Postponed]* Tail-call optimization to prevent stack overflow.
 - [x] **Step 6:** Files, Mutation, and Evil — File operations, state mutation, `eval`.
-- [ ] **Step 7:** Quoting — Implementation of quoting (`quote`, `quasiquote`, `unquote`).
+- [x] **Step 7:** Quoting — Implementation of quoting (`quote`, `quasiquote`, `unquote`).
 - [ ] **Step 8:** Macros — Adding support for macros (code as data, data as code).
 - [ ] **Step 9:** Try / Catch — Exception handling.
 - [ ] **Step A:** Mal — Self-hosting and final touches (host platform interoperability).
