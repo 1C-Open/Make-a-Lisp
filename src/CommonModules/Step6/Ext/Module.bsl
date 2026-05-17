@@ -1,14 +1,24 @@
-﻿// =============================================================================
-// MaL (Make-a-Lisp) Interpreter - Step 4: If Fn Do
 // =============================================================================
-// This module implements the control flow and I/O core of the interpreter:
-// 1. Implements core special forms ('if', 'do', 'fn*') for branching,
-//    sequencing, and function definition with lexical closures.
-// 2. Provides I/O primitives ('prn', 'println', 'str', 'pr-str') with
-//    robust string escaping support for consistent data serialization.
+// MaL (Make-a-Lisp) Interpreter - Step 6: Files, Mutation, and Evil
+// =============================================================================
+//
+// 1. ATOMS & MUTATION: Implemented mutable state containers using the Atom
+//    type. Added core functions: atom, atom?, deref (@), reset!, and swap!.
+//
+// 2. FILE OPERATIONS: Added the ability to interact with the file system
+//    via 'slurp' for reading raw text and 'load-file' for executing
+//    external Lisp scripts.
+//
+// 3. EVAL & READ-STRING: Exposed the internal evaluation engine to the
+//    language itself. 'read-string' converts text to AST, and 'eval'
+//    executes it within the global environment.
+//
+// 4. COMMAND LINE ARGUMENTS: Added the *ARGV* special symbol to the
+//    global environment to handle script parameters.
+//
 // =============================================================================
 
-// Main entry point for Step 4 of the Make-a-Lisp interpreter.
+// Main entry point for Step 6 of the Make-a-Lisp interpreter.
 // Evaluates the abstract syntax tree in a basic environment.
 //
 // Parameters:
@@ -17,11 +27,12 @@
 //
 // Returns:
 //   String - The final result of the REPL pipeline (serialized string representation).
-Function MaL_Step_4(Input, Debug) Export
+Function MaL_Step_6(Input, Debug) Export
     AST = Read(Input, Debug);
     GlobalEnvironment = CreateGlobalEnvironment();
     InitializeCore(GlobalEnvironment);
-    Output = "";
+    // Initialize *ARGV* as an empty List
+    SetEnvironment(GlobalEnvironment, "*ARGV*", New Structure("Type, Value", "List", New Array)); Output = "";
     For Each Expression In AST.Value Do
         Result = Exec(Expression, GlobalEnvironment, Debug);
         Output = Output + Print(Result, Debug) + Chars.CR;
@@ -42,7 +53,7 @@ Function Read(Input, Debug)
     // 1. Lexical analysis
     Tokens = Tokenize(Input);
     // Print tokens to Debug for tracking
-    Debug = "TOKENS: " + Chars.CR;
+    Debug = Debug + "TOKENS: " + Chars.CR;
     For Each Token In Tokens Do
         Debug = Debug + Token + Chars.CR;
     EndDo;
@@ -137,23 +148,6 @@ Function Exec(AST, Environment, Debug) Export
                 i = i + 2;
             EndDo;
             Return Exec(NodesArray[2], LocalEnvironment, Debug); // Evaluate the let* body
-            //Else
-            //    // Evaluate all elements recursively
-            //    EvaluatedList = New Array;
-            //    For Each Item In NodesArray Do
-            //        EvaluatedItem = Exec(Item, Environment, Debug);
-            //        If IsError(EvaluatedItem) Then Return EvaluatedItem; EndIf;
-            //        EvaluatedList.Add(EvaluatedItem);
-            //    EndDo;
-            //
-            //    Operator = EvaluatedList[0]; // The first element is the function identifier
-            //    Args = New Array; // Create an array of arguments (everything except the first element)
-            //    For i = 1 To EvaluatedList.Count() - 1 Do
-            //        Args.Add(EvaluatedList[i]);
-            //    EndDo;
-            //
-            //    Return Apply(Operator, Args); // Apply the operator to the arguments
-            //EndIf;
             // 2.4 Check for Special Forms (if)
         ElsIf OperatorNode.Value = "if" Then
             // 2.4.1 Evaluate only the condition
@@ -195,50 +189,6 @@ Function Exec(AST, Environment, Debug) Export
             // Return the result of the last expression
             Return Result;
         Else
-            Operator = Exec(AST.Value[0], Environment, Debug);
-            // Check: is it a structure, and does it have a 'Type' property?
-            If TypeOf(Operator) = Type("Structure") AND Operator.Property("Type") Then
-                // Check if this is an 'fn*' function
-                If Operator.Type = "Function" Then
-                    LocalEnvironment = CreateEnvironment(Operator.Environment);
-                    Params = Operator.Params.Value;
-                    ArgsCount = AST.Value.Count() - 1;
-                    For i = 0 To Params.Count() - 1 Do
-                        ParamName = Params[i].Value;
-                        If ParamName = "&" Then
-                            // Check if there is a variable name after '&'
-                            If i + 1 < Params.Count() Then
-                                RestSymbol = Params[i + 1].Value;
-                                RestArgs = New Array;
-                                // Collect all remaining arguments into an array
-                                For j = i + 1 To ArgsCount Do
-                                    RestArgs.Add(Exec(AST.Value[j], Environment, Debug));
-                                EndDo;
-                                // Wrap in a List (as required by MaL for & more)
-                                ListNode = New Structure("Type, Value", "List", RestArgs);
-                                SetEnvironment(LocalEnvironment, RestSymbol, ListNode);
-                                Break; // Stop binding arguments
-                            EndIf;
-                        Else
-                            // Standard argument binding
-                            If i < ArgsCount Then
-                                ArgValue = Exec(AST.Value[i + 1], Environment, Debug); // Evaluate arguments
-                                SetEnvironment(LocalEnvironment, ParamName, ArgValue); // Store in the local environment
-                            EndIf;
-                        EndIf;
-                    EndDo;
-                    Return Exec(Operator.Body, LocalEnvironment, Debug);
-                EndIf;
-            EndIf;
-            
-            // Check if the operator is valid
-            // Assuming "Operator" should be a function or a built-in symbol
-            If IsError(Operator) Then
-                // This is where we catch your specific case (abc 1 2)
-                Debug = Debug + Operator.Value + Chars.CR;
-                Return Operator;
-            EndIf;
-            
             // Evaluate all elements recursively
             EvaluatedList = New Array;
             For Each Item In NodesArray Do
@@ -247,13 +197,26 @@ Function Exec(AST, Environment, Debug) Export
                 EvaluatedList.Add(EvaluatedItem);
             EndDo;
             
-            Operator = EvaluatedList[0]; // The first element is the function identifier
-            Args = New Array; // Create an array of arguments (everything except the first element)
+            Operator = EvaluatedList[0]; // The first element is the evaluated function identifier
+            
+            // Check if the operator is valid
+            If IsError(Operator) Then
+                Debug = Debug + Operator.Value + Chars.CR;
+                Return Operator;
+            EndIf;
+            
+            Args = New Array; // Create an array of evaluated arguments
             For i = 1 To EvaluatedList.Count() - 1 Do
                 Args.Add(EvaluatedList[i]);
             EndDo;
             
-            Return Apply(Operator, Args, Debug); // Apply the operator to the arguments
+            // Check if it's a user-defined function (fn*)
+            If TypeOf(Operator) = Type("Structure") AND Operator.Property("Type") AND Operator.Type = "Function" Then
+                Return InvokeFunction(Operator, Args, Debug);
+            EndIf;
+            
+            // Apply built-in function
+            Return Apply(Operator, Args, Environment, Debug); // Apply the operator to the arguments
         EndIf;
         
         // 3. Handle Vector: evaluate all elements within the vector
@@ -284,6 +247,40 @@ Function Exec(AST, Environment, Debug) Export
         Return AST;
     EndIf;
     
+EndFunction
+
+// Invokes a user-defined Lisp function (fn*) with evaluated arguments.
+// Supports variable arguments via '& rest'.
+Function InvokeFunction(FunctionNode, Args, Debug) Export
+    LocalEnvironment = CreateEnvironment(FunctionNode.Environment);
+    Params = FunctionNode.Params.Value;
+    ArgsCount = Args.Count();
+    
+    For i = 0 To Params.Count() - 1 Do
+        ParamName = Params[i].Value;
+        If ParamName = "&" Then
+            // Check if there is a variable name after '&'
+            If i + 1 < Params.Count() Then
+                RestSymbol = Params[i + 1].Value;
+                RestArgs = New Array;
+                // Collect all remaining arguments into an array
+                For j = i To ArgsCount - 1 Do
+                    RestArgs.Add(Args[j]);
+                EndDo;
+                // Wrap in a List (as required by MaL for & more)
+                ListNode = New Structure("Type, Value", "List", RestArgs);
+                SetEnvironment(LocalEnvironment, RestSymbol, ListNode);
+                Break; // Stop binding arguments
+            EndIf;
+        Else
+            // Standard argument binding
+            If i < ArgsCount Then
+                SetEnvironment(LocalEnvironment, ParamName, Args[i]);
+            EndIf;
+        EndIf;
+    EndDo;
+    
+    Return Exec(FunctionNode.Body, LocalEnvironment, Debug);
 EndFunction
 
 // Constructs a structured error message
@@ -738,6 +735,10 @@ Function PrintForm(Node)
             
         ElsIf Node.Type = "Function" Then
             Return "<function>";
+        ElsIf Node.Type = "Atom" Then
+            // Extract the value from our technical container (Value.Value)
+            // and recursively print it, wrapped in an (atom ...) structure
+            Return "(atom " + PrintForm(Node.Value.Value) + ")";
         Else
             // Default: treat as Symbol
             Return Node.Value;
@@ -819,7 +820,14 @@ Function PrintDebug(Node, Indent = 0)
     Return Result;
 EndFunction
 
-// Universal environment constructor
+// Universal environment constructor.
+// Creates a new execution context, optionally linked to a parent (Outer).
+//
+// Parameters:
+//   Outer - Map|Undefined - The parent environment.
+//
+// Returns:
+//   Structure - A new environment containing a Data map and Outer reference.
 Function CreateEnvironment(Outer = Undefined)
     Environment = New Structure("Data, Outer");
     Environment.Data = New Map;
@@ -837,12 +845,39 @@ Function CreateGlobalEnvironment()
     Return CreateEnvironment(Undefined);
 EndFunction
 
-// Inserts a Key-Value pair into the environment's Data map
+// Traverses the environment chain upwards to find and return the global root environment.
+//
+// Parameters:
+//   Environment - Structure - The starting environment.
+//
+// Returns:
+//   Structure - The top-level global environment.
+Function GetGlobalEnvironment(Environment)
+    Current = Environment;
+    While Current.Outer <> Undefined Do
+        Current = Current.Outer;
+    EndDo;
+    Return Current;
+EndFunction
+
+// Inserts or updates a Key-Value pair in the specified environment's local Data map.
+//
+// Parameters:
+//   Environment - Structure - The target environment.
+//   Symbol      - String    - The variable name to bind.
+//   Value       - Any       - The value to store.
 Procedure SetEnvironment(Environment, Symbol, Value)
     Environment.Data.Insert(Symbol, Value);
 EndProcedure
 
-// Recursive search for a variable in the environment chain
+// Recursively searches for a variable symbol in the environment chain.
+//
+// Parameters:
+//   Environment - Structure - The starting environment.
+//   Symbol      - String    - The variable name to find.
+//
+// Returns:
+//   Any - The value bound to the symbol, or an Error node if not found.
 Function GetEnvironment(Environment, Symbol) Export
     // 1. Attempt to find the Symbol in the current environment
     If Environment.Data.Get(Symbol) <> Undefined Then
@@ -881,25 +916,36 @@ Procedure InitializeCore(Environment)
     SetEnvironment(Environment, "list?", "LISTQ"); // 'Q' stands for Question mark (predicate)
     SetEnvironment(Environment, "empty?", "EMPTYQ");
     SetEnvironment(Environment, "count", "COUNT");
+    SetEnvironment(Environment, "eval", "EVAL");
+    // Atom operations
+    SetEnvironment(Environment, "atom", "ATOM");
+    SetEnvironment(Environment, "atom?", "ATOMQ");
+    SetEnvironment(Environment, "deref", "DEREF");
+    SetEnvironment(Environment, "reset!", "RESET");
+    SetEnvironment(Environment, "swap!", "SWAP");
     // I/O and String manipulation
     SetEnvironment(Environment, "prn", "PRINT");
     SetEnvironment(Environment, "println", "PRINTLN");
     SetEnvironment(Environment, "pr-str", "PRSTR");
     SetEnvironment(Environment, "str", "STR");
+    SetEnvironment(Environment, "read-string", "READSTRING");
+    SetEnvironment(Environment, "slurp", "SLURP");
+    SetEnvironment(Environment, "load-file", "LOADFILE");
 EndProcedure
 
-// Executes the mathematical function associated with the operator identifier.
+// Executes the function associated with the operator identifier.
 //
 // Parameters:
-//   Operator - String - The internal identifier of the function (e.g., "ADD", "MUL").
-//   Args     - Array  - A list of already evaluated arguments.
-//   Debug    - String - Output parameter for tracing.
+//   Operator    - String - The internal identifier of the function (e.g., "ADD", "MUL").
+//   Args        - Array  - A list of already evaluated arguments.
+//   Environment - Map    - The execution context.
+//   Debug       - String - Output parameter for tracing.
 //
 // Returns:
-//   Number - The result of the operation.
+//   Any - The result of the operation.
 // Raises:
 //   Exception - If the operator is unknown.
-Function Apply(Operator, Args, Debug)
+Function Apply(Operator, Args, Environment, Debug)
     If Operator = "ADD" Then Sum = 0;
         For Each Arg In Args Do
             Sum = Sum + Arg.Value;
@@ -964,6 +1010,81 @@ Function Apply(Operator, Args, Debug)
             // Report an error: 'count' expects a list, but received a number or other type
             Return CreateError("Apply.COUNT", "Argument must be a list or nil, not %1", Args[0].Type);
         EndIf;
+    ElsIf Operator = "ATOM" Then
+        // Create a new atom (mutable container)
+        If Args.Count() = 0 Then
+            Return CreateError("Apply.ATOM", "Wrong number of args (0) passed to atom");
+        EndIf;
+        // Use a structure with a "Value" key as a technical container
+        // This ensures mutability (pass by reference in 1C)
+        Container = New Structure("Value", Args[0]);
+        // Return an AST node of type "Atom"
+        Return New Structure("Type, Value", "Atom", Container);
+    ElsIf Operator = "ATOMQ" Then
+        // Predicate atom?
+        If Args.Count() = 0 Then
+            Return CreateError("Apply.ATOMQ", "Wrong number of args (0) passed to atom?");
+        EndIf;
+        IsAtom = False;
+        // Verify that it is an AST Structure and its Type is "Atom"
+        If TypeOf(Args[0]) = Type("Structure") Then
+            If Args[0].Property("Type") AND Args[0].Type = "Atom" Then
+                IsAtom = True;
+            EndIf;
+        EndIf;
+        Return New Structure("Type, Value", "Boolean", IsAtom);
+    ElsIf Operator = "DEREF" Then
+        // Extract the value from the container
+        Return Args[0].Value.Value;
+    ElsIf Operator = "RESET" Then
+        // 1. Check that the first argument is indeed an atom
+        If NOT (TypeOf(Args[0]) = Type("Structure") AND Args[0].Property("Type") AND Args[0].Type = "Atom") Then
+            Return CreateError("Apply.RESET", "First argument must be an atom");
+        EndIf;
+        // 2. Change the value in the technical container
+        Args[0].Value.Value = Args[1];
+        // 3. reset! returns the new value according to the MaL standard
+        Return Args[0].Value.Value;
+    ElsIf Operator = "SWAP" Then
+        // Args[0] - AtomNode, Args[1] - Function Node, Args[2...] - Remaining arguments for this function
+        // 1. Validations
+        If Args.Count() < 2 Then
+            Return CreateError("Apply.SWAP", "Requires at least 2 arguments (atom and function)");
+        EndIf;
+        If Args[0].Type <> "Atom" Then
+            Return CreateError("Apply.SWAP", "First argument must be an atom");
+        EndIf;
+        // 2. Prepare arguments for the function call
+        // The new argument list will be: [CurrentAtomValue, AdditionalArg1, AdditionalArg2...]
+        NewFuncArgs = New Array;
+        NewFuncArgs.Add(Args[0].Value.Value); // Extract data from the container
+        // Add the remaining arguments passed to swap!
+        For i = 2 To Args.Count() - 1 Do
+            NewFuncArgs.Add(Args[i]);
+        EndDo;
+        // 3. Compute the new value
+        NewValue = Undefined;
+        // CASE A: It's a built-in function (just a string in our system)
+        If TypeOf(Args[1]) = Type("String") Then
+            NewValue = Apply(Args[1], NewFuncArgs, Environment, Debug);
+            // CASE B: It's a user-defined function (structure with type "Function")
+		ElsIf TypeOf(Args[1]) = Type("Structure") AND Args[1].Property("Type") AND Args[1].Type = "Function" Then
+			// For user-defined functions (fn*), we need to create an environment and execute the body
+            // This repeats the logic from the Else block of our Exec function
+			// We simply call the centralized function, passing the prepared arguments
+        	NewValue = InvokeFunction(Args[1], NewFuncArgs, Debug);
+		Else
+            Return CreateError("Apply.SWAP", "Second argument must be a function");
+        EndIf;
+        // 4. Check for errors during computation
+        If IsError(NewValue) Then Return NewValue; EndIf;
+        // 5. Mutation: write the result back to the atom
+        Args[0].Value.Value = NewValue;
+        // 6. Return the new value
+        Return Args[0].Value.Value;
+    ElsIf Operator = "EVAL" Then
+        GlobalEnvironment = GetGlobalEnvironment(Environment);
+        Return Exec(Args[0], GlobalEnvironment, Debug);
     ElsIf Operator = "STR" Then
         // Concatenates the string representations of arguments. If an argument is a string, print it without quotes
         Result = "";
@@ -1008,6 +1129,51 @@ Function Apply(Operator, Args, Debug)
         EndDo;
         Debug = Debug + ResultString + Chars.CR;
         Return New Structure("Type, Value", "Nil", Undefined);
+    ElsIf Operator = "READSTRING" Then
+        If Args.Count() = 0 Then
+            Return CreateError("Apply.read-string", "Expected a string argument");
+        EndIf;
+        // Call the main reader
+        // Important: Read usually returns a list of forms (since a file can have many expressions),
+        // but read-string in MaL usually reads only the FIRST form.
+        // If Read(Input) returns a Structure with an array of forms, we take the first one.
+        AST = Read(Args[0].Value, Debug);
+        // If Read returned a List of multiple forms, read-string takes only the first
+        If AST.Type = "List" AND AST.Value.Count() > 0 Then
+            Return AST.Value[0];
+        Else
+            Return AST;
+        EndIf;
+    ElsIf Operator = "SLURP" Then
+        If Args.Count() = 0 Then
+            Return CreateError("Apply.SLURP", "Expected a file path argument");
+        EndIf;
+        Try
+            Reader = New TextReader(Args[0].Value, TextEncoding.UTF8);
+            InputText = Reader.Read();
+            Reader.Close();
+            // Return the result as an AST node of type String
+            Return New Structure("Type, Value", "String", InputText);
+        Except
+            Return CreateError("Apply.SLURP", "Could not read file: %1" + Chars.CR + ErrorDescription(), Args[0].Value);
+        EndTry;
+    ElsIf Operator = "LOADFILE" Then
+        // 1. Read file content
+        FileContentNode = Apply("SLURP", Args, Environment, Debug);
+        If FileContentNode.Type = "Error" Then Return FileContentNode; EndIf;
+        GlobalEnvironment = GetGlobalEnvironment(Environment);
+        // 2. Parse content into an AST (which is a List containing all forms)
+        AST = Read(FileContentNode.Value, Debug);
+        // 3. IMPORTANT: Iterate through each form in the file and evaluate them individually
+        // This matches the logic in MaL_Step_6
+        Result = New Structure("Type, Value", "Nil", Undefined);
+        For Each Expression In AST.Value Do
+            Result = Exec(Expression, GlobalEnvironment, Debug);
+            // If an error occurs during execution, stop and return it
+            If IsError(Result) Then Return Result; EndIf;
+        EndDo;
+        // 4. Per your requirement, load-file should return nil after execution
+        Return New Structure("Type, Value", "Nil", Undefined);
     Else
         Return CreateError("Apply", "Unknown function %1", Operator);
     EndIf;
@@ -1022,55 +1188,28 @@ EndFunction
 // Returns:
 //   Structure - A Boolean Node containing the result.
 Function IsEqual(Node1, Node2)
-    // 1. Extract types for comparison
-    Type1 = Node1.Type;
-    Type2 = Node2.Type;
-    
-    // In MaL, Lists and Vectors are considered equivalent if they contain the same elements
-    If Type1 <> Type2 Then
-        // Check if both nodes are sequential collections
-        IsSeq1 = (Type1 = "List" OR Type1 = "Vector");
-        IsSeq2 = (Type2 = "List" OR Type2 = "Vector");
-        
-        // If one is a sequence and the other is not, they cannot be equal
-        If NOT (IsSeq1 AND IsSeq2) Then
-            Return New Structure("Type, Value", "Boolean", FALSE);
-        EndIf;
+    // 1. First, compare the types
+    If Node1.Type <> Node2.Type Then
+        Return New Structure("Type, Value", "Boolean", FALSE);
     EndIf;
     
-    // 2. Compare sequential collections (Lists and Vectors)
-    If Type1 = "List" OR Type1 = "Vector" OR Type2 = "List" OR Type2 = "Vector" Then
-        // Compare the number of elements first for efficiency
+    // 2. If it is a list, compare its contents (recursively)
+    If Node1.Type = "List" Then
+        // Compare the number of elements
         If Node1.Value.Count() <> Node2.Value.Count() Then
             Return New Structure("Type, Value", "Boolean", FALSE);
         EndIf;
-        
-        // Compare each element pair recursively
+        // Compare each list element pairwise
         For i = 0 To Node1.Value.Count() - 1 Do
-            SubEqual = IsEqual(Node1.Value[i], Node2.Value[i]);
-            If NOT SubEqual.Value Then
-                // Return immediately if any pair of elements does not match
+            If NOT IsEqual(Node1.Value[i], Node2.Value[i]).Value Then
+                // If any element doesn't match, return
                 Return New Structure("Type, Value", "Boolean", FALSE);
             EndIf;
         EndDo;
-        
-        // All elements matched in order
+        //All elements match
         Return New Structure("Type, Value", "Boolean", TRUE);
     EndIf;
     
-    // 3. Handle HashMap equality (Step 9/Optional)
-    If Type1 = "HashMap" Then
-        // HashMaps must have the same number of elements
-        If Node1.Value.Count() <> Node2.Value.Count() Then
-            Return New Structure("Type, Value", "Boolean", FALSE);
-        EndIf;
-        
-        // Note: For full HashMap support, you should compare keys/values
-        // regardless of their order in the flat array[cite: 105, 106].
-        // Implementing this requires a way to look up keys in the other map.
-    EndIf;
-    
-    // 4. Atomic types comparison (Number, String, Symbol, Boolean, Nil)
-    // BSL's "=" operator works correctly for these basic types
+    // 3. For atomic types (Number, String, Boolean, Nil), simply compare their values
     Return New Structure("Type, Value", "Boolean", (Node1.Value = Node2.Value));
 EndFunction

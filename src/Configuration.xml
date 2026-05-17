@@ -251,6 +251,7 @@
 			<CommonModule>Step2</CommonModule>
 			<CommonModule>Step3</CommonModule>
 			<CommonModule>Step4</CommonModule>
+			<CommonModule>Step6</CommonModule>
 			<DataProcessor>MakeALisp</DataProcessor>
 		</ChildObjects>
 	</Configuration>
